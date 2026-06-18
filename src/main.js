@@ -1,39 +1,32 @@
-import { GameEngine } from './GameEngine.js';
-import { MapRenderer } from './MapRenderer.js';
-import { TowerManager } from './TowerManager.js';
-import { EnemyManager } from './EnemyManager.js';
-import { UIController } from './UIController.js';
+import { GameEngine } from './core/GameEngine.js';
+import { UIController } from './core/UIController.js';
+import { MapRenderer } from './core/MapRenderer.js';
+import { WAVES } from './config.js';
 
-const canvas = document.getElementById('game-canvas');
-const ctx = canvas.getContext('2d');
+window.addEventListener('DOMContentLoaded', () => {
+  const canvas = document.getElementById('game-canvas');
+  if (!canvas) {
+    console.error('Canvas element #game-canvas not found!');
+    return;
+  }
 
-const TILE_SIZE = 40;
-const GRID_WIDTH = 20;
-const GRID_HEIGHT = 15;
+  const gameConfig = {
+    totalWaves: WAVES.length
+  };
 
-const config = {
-  tileSize: TILE_SIZE,
-  gridWidth: GRID_WIDTH,
-  gridHeight: GRID_HEIGHT,
-  initialGold: 150,
-  initialHealth: 20,
-  totalWaves: 3,
-  waveCountdown: 10
-};
+  const gameEngine = new GameEngine(canvas, gameConfig);
+  gameEngine.init();
 
-const mapRenderer = new MapRenderer(ctx, config);
-const towerManager = new TowerManager(ctx, config, mapRenderer);
-const enemyManager = new EnemyManager(ctx, config, mapRenderer);
-const uiController = new UIController(config);
+  const uiController = new UIController(gameEngine, canvas);
+  const mapRenderer = new MapRenderer(gameEngine);
 
-const gameEngine = new GameEngine(ctx, config, mapRenderer, towerManager, enemyManager, uiController);
+  gameEngine.start();
 
-uiController.setGameEngine(gameEngine);
-towerManager.setEnemyManager(enemyManager);
+  window.gameEngine = gameEngine;
+  window.uiController = uiController;
+  window.mapRenderer = mapRenderer;
 
-window.gameEngine = gameEngine;
-window.towerManager = towerManager;
-window.enemyManager = enemyManager;
-window.uiController = uiController;
-
-gameEngine.start();
+  console.log('[像素守卫-ECS版] 初始化完成！');
+  console.log('可用调试: gameEngine, uiController, mapRenderer');
+  console.log('关卡数量:', gameEngine.currentLevel.name);
+});

@@ -1,0 +1,69 @@
+{
+  "levels": [
+    {
+      "id": 1,
+      "name": "草原之路",
+      "gridWidth": 20,
+      "gridHeight": 15,
+      "tileSize": 40,
+      "pathCoords": [
+        { "x": 0, "y": 7 },
+        { "x": 4, "y": 7 },
+        { "x": 4, "y": 3 },
+        { "x": 9, "y": 3 },
+        { "x": 9, "y": 11 },
+        { "x": 14, "y": 11 },
+        { "x": 14, "y": 5 },
+        { "x": 19, "y": 5 }
+      ],
+      "buildableExclude": [],
+      "initialGold": 150,
+      "initialHealth": 20,
+      "waveCountdown": 10,
+      "theme": "grass"
+    },
+    {
+      "id": 2,
+      "name": "S形峡谷",
+      "gridWidth": 20,
+      "gridHeight": 15,
+      "tileSize": 40,
+      "pathCoords": [
+        { "x": 0, "y": 2 },
+        { "x": 15, "y": 2 },
+        { "x": 15, "y": 7 },
+        { "x": 3, "y": 7 },
+        { "x": 3, "y": 12 },
+        { "x": 19, "y": 12 }
+      ],
+      "buildableExclude": [],
+      "initialGold": 200,
+      "initialHealth": 20,
+      "waveCountdown": 10,
+      "theme": "desert"
+    },
+    {
+      "id": 3,
+      "name": "Z形险道",
+      "gridWidth": 20,
+      "gridHeight": 15,
+      "tileSize": 40,
+      "pathCoords": [
+        { "x": 0, "y": 1 },
+        { "x": 6, "y": 1 },
+        { "x": 6, "y": 7 },
+        { "x": 13, "y": 7 },
+        { "x": 13, "y": 1 },
+        { "x": 17, "y": 1 },
+        { "x": 17, "y": 13 },
+        { "x": 19, "y": 13 }
+      ],
+      "buildableExclude": [],
+      "initialGold": 180,
+      "initialHealth": 18,
+      "waveCountdown": 8,
+      "theme": "snow"
+    }
+  ],
+  "defaultLevelId": 1
+}

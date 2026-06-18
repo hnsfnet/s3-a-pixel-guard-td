@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>像素守卫 - Pixel Guard</title>
+    <title>像素守卫 - Pixel Guard (ECS架构)</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,133 +11,91 @@
         <div class="hud">
             <div class="hud-item">
                 <span class="hud-label">波次</span>
-                <span id="wave-value" class="hud-value">1 / 3</span>
+                <span id="hud-wave" class="hud-value">1 / 3</span>
             </div>
             <div class="hud-item">
                 <span class="hud-icon">💰</span>
-                <span id="gold-value" class="hud-value gold">150</span>
+                <span id="hud-gold" class="hud-value gold">150</span>
             </div>
             <div class="hud-item">
                 <span class="hud-icon">❤️</span>
-                <div class="health-bar">
-                    <div id="health-fill" class="health-fill"></div>
-                    <span id="health-value" class="health-value">20 / 20</span>
-                </div>
+                <span id="hud-health" class="hud-value health">20</span>
             </div>
             <div class="hud-item">
-                <span class="hud-label">倒计时</span>
-                <span id="countdown-value" class="hud-value countdown">10</span>
+                <span class="hud-label">状态</span>
+                <span id="hud-countdown" class="hud-value countdown">10s</span>
             </div>
-            <div id="next-wave-preview" class="wave-preview">
-                <span class="hud-label">下一波</span>
-                <div id="preview-enemies" class="preview-enemies">
-                </div>
+            <div class="hud-item">
+                <span id="enemies-remaining" class="hud-value small">剩余: 0/0</span>
+            </div>
+            <div id="wave-preview" class="wave-preview">
+                <span class="hud-label small">下一波</span>
+                <div id="wave-preview-inner" class="preview-enemies"></div>
+            </div>
+            <div class="hud-item level-select-wrap">
+                <span class="hud-label small">关卡:</span>
+                <select id="level-selector" class="level-selector"></select>
+            </div>
+            <div class="hud-item">
+                <button id="start-countdown-btn" class="countdown-btn">⏩ 开始波次</button>
             </div>
         </div>
 
         <div class="canvas-wrapper">
             <canvas id="game-canvas" width="800" height="600"></canvas>
-            
-            <div id="build-menu" class="build-menu hidden">
-                <div class="build-menu-title">选择防御塔</div>
+
+            <div id="build-menu" class="build-menu">
+                <div class="build-menu-title">🏰 建造防御塔</div>
                 <div class="tower-options">
-                    <div class="tower-option" data-tower="ARROW">
+                    <button id="build-arrow" class="tower-option-btn">
                         <div class="tower-icon arrow-icon"></div>
-                        <div class="tower-name">箭塔</div>
-                        <div class="tower-stats">
-                            <div class="stat-row">
-                                <span class="stat-label">伤害</span>
-                                <span class="stat-value">10</span>
-                            </div>
-                            <div class="stat-row">
-                                <span class="stat-label">攻速</span>
-                                <span class="stat-value">快</span>
-                            </div>
-                            <div class="stat-row">
-                                <span class="stat-label">射程</span>
-                                <span class="stat-value">3格</span>
-                            </div>
-                            <div class="stat-row">
-                                <span class="stat-label">对空</span>
-                                <span class="stat-value good">✓</span>
-                            </div>
+                        <div class="tower-info">
+                            <div class="tower-name">箭塔</div>
+                            <div class="tower-cost">💰 50</div>
                         </div>
-                        <div class="tower-cost">💰 50</div>
-                    </div>
-                    <div class="tower-option" data-tower="CANNON">
+                        <div class="tower-brief">快速低伤 · 可打飞行</div>
+                    </button>
+                    <button id="build-cannon" class="tower-option-btn">
                         <div class="tower-icon cannon-icon"></div>
-                        <div class="tower-name">炮塔</div>
-                        <div class="tower-stats">
-                            <div class="stat-row">
-                                <span class="stat-label">伤害</span>
-                                <span class="stat-value">35</span>
-                            </div>
-                            <div class="stat-row">
-                                <span class="stat-label">攻速</span>
-                                <span class="stat-value">慢</span>
-                            </div>
-                            <div class="stat-row">
-                                <span class="stat-label">射程</span>
-                                <span class="stat-value">4格</span>
-                            </div>
-                            <div class="stat-row">
-                                <span class="stat-label">溅射</span>
-                                <span class="stat-value">1.2格</span>
-                            </div>
-                            <div class="stat-row">
-                                <span class="stat-label">对空</span>
-                                <span class="stat-value bad">✗</span>
-                            </div>
+                        <div class="tower-info">
+                            <div class="tower-name">炮塔</div>
+                            <div class="tower-cost">💰 100</div>
                         </div>
-                        <div class="tower-cost">💰 100</div>
-                    </div>
-                </div>
-                <button id="cancel-build" class="cancel-btn">取消</button>
-            </div>
-
-            <div id="upgrade-panel" class="upgrade-panel hidden">
-                <div id="upgrade-title" class="upgrade-title">箭塔 Lv.1</div>
-                <div id="upgrade-desc" class="upgrade-desc">基础箭塔，攻速快、伤害低、射程短</div>
-                
-                <div class="upgrade-section current">
-                    <div class="section-title">当前属性</div>
-                    <div id="current-stats" class="stats-grid"></div>
-                </div>
-
-                <div id="upgrade-next-section" class="upgrade-section next">
-                    <div class="section-title">升级为：<span id="next-name"></span></div>
-                    <div id="next-effects" class="effects-list"></div>
-                    <div id="next-stats" class="stats-grid"></div>
-                </div>
-
-                <div id="max-level-section" class="max-level-section">
-                    <div class="section-title max">⭐ 已满级 ⭐</div>
-                    <div class="max-desc">已达到最高等级 3 级</div>
-                </div>
-
-                <div class="upgrade-actions">
-                    <button id="cancel-upgrade" class="cancel-btn">关闭</button>
-                    <button id="confirm-upgrade" class="upgrade-btn">
-                        <span id="upgrade-cost">💰 80</span> 升级
+                        <div class="tower-brief">慢速高伤 · 范围溅射</div>
+                    </button>
+                    <button id="build-cancel" class="tower-option-btn cancel">
+                        <div class="tower-icon cancel-icon">✕</div>
+                        <div class="tower-info">
+                            <div class="tower-name">取消</div>
+                            <div class="tower-cost">&nbsp;</div>
+                        </div>
+                        <div class="tower-brief">退出建造模式</div>
                     </button>
                 </div>
             </div>
 
-            <div id="game-over" class="game-over hidden">
+            <div id="upgrade-panel" class="upgrade-panel hidden">
+                <div class="panel-header">
+                    <div id="upgrade-content"></div>
+                    <button id="upgrade-close" class="panel-close">✕</button>
+                </div>
+            </div>
+
+            <div id="game-over-panel" class="game-over hidden">
                 <div class="game-over-content">
                     <h1 id="game-over-title">游戏结束</h1>
-                    <div class="game-stats">
-                        <div>通过波次：<span id="final-wave">0</span> / 3</div>
-                        <div>剩余金币：<span id="final-gold">0</span></div>
-                        <div>剩余生命：<span id="final-health">0</span></div>
+                    <div id="game-over-stats" class="game-stats"></div>
+                    <div class="game-over-actions">
+                        <button id="restart-btn" class="restart-btn">🔄 重新开始</button>
+                        <button id="next-level-btn" class="next-level-btn">➡️ 下一关</button>
                     </div>
-                    <button id="restart-btn" class="restart-btn">重新开始</button>
                 </div>
             </div>
         </div>
 
         <div class="instructions">
-            <p>💡 点击绿色空地建塔 | 点击已建塔升级 | 只有箭塔能攻击飞行敌人 | 守护你的领地！</p>
+            <p>💡 <b>操作</b>：点击上方建造按钮 → 在绿色空地点击建塔 | 点击已建塔查看升级 | <b>右键</b>或"取消"退出建造/升级</p>
+            <p>⚔️ <b>机制</b>：箭塔可攻击飞行敌人 / 炮塔溅射伤害(主目标100% / 其他60%) / 塔可升级3级(连弩/毒箭/火焰炮/冰冻炮)</p>
         </div>
     </div>
 
