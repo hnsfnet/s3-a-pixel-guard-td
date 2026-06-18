@@ -31,4 +31,9 @@ const gameEngine = new GameEngine(ctx, config, mapRenderer, towerManager, enemyM
 uiController.setGameEngine(gameEngine);
 towerManager.setEnemyManager(enemyManager);
 
+window.gameEngine = gameEngine;
+window.towerManager = towerManager;
+window.enemyManager = enemyManager;
+window.uiController = uiController;
+
 gameEngine.start();

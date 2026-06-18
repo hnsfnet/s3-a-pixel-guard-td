@@ -1,4 +1,4 @@
-import { WAVES } from './config.js';
+import { WAVES, getWaveTotalCount } from './config.js';
 
 let enemyIdCounter = 0;
 
@@ -10,15 +10,25 @@ export class EnemyManager {
     this.tileSize = config.tileSize;
     this.enemies = [];
     this.spawnedCount = 0;
+    this.spawnedByType = [];
     this.spawnTimer = 0;
     this.hitEffects = [];
+    this.flyingStartX = -20;
+    this.flyingStartY = 40;
+    this.flyingEndX = this.config.gridWidth * this.tileSize + 20;
+    this.flyingEndY = this.config.gridHeight * this.tileSize * 0.35;
   }
 
   update(dt, waveIndex, gameEngine) {
     const waveConfig = WAVES[waveIndex - 1];
     if (!waveConfig) return;
 
-    if (this.spawnedCount < waveConfig.count) {
+    if (!this.spawnedByType || this.spawnedByType.length !== waveConfig.enemies.length) {
+      this.spawnedByType = waveConfig.enemies.map(() => 0);
+    }
+
+    const totalToSpawn = getWaveTotalCount(waveIndex - 1);
+    if (this.spawnedCount < totalToSpawn) {
       this.spawnTimer -= dt;
       if (this.spawnTimer <= 0) {
         this._spawnEnemy(waveConfig);
@@ -30,7 +40,9 @@ export class EnemyManager {
     const toRemove = [];
     for (let i = 0; i < this.enemies.length; i++) {
       const enemy = this.enemies[i];
-      this._moveEnemy(enemy, dt, waveConfig);
+
+      this._updateStatusEffects(enemy, dt);
+      this._moveEnemy(enemy, dt);
 
       if (enemy.progress >= 1) {
         gameEngine.deductHealth(1);
@@ -60,35 +72,107 @@ export class EnemyManager {
   }
 
   _spawnEnemy(waveConfig) {
-    const startPos = this.mapRenderer.getPositionOnPath(0);
-    const baseHp = waveConfig.hp;
+    let typeIndex = 0;
+    let remaining = this.spawnedCount;
+    for (let i = 0; i < waveConfig.enemies.length; i++) {
+      if (remaining < waveConfig.enemies[i].count) {
+        typeIndex = i;
+        break;
+      }
+      remaining -= waveConfig.enemies[i].count;
+      if (i === waveConfig.enemies.length - 1) typeIndex = i;
+    }
+
+    const typeCfg = waveConfig.enemies[typeIndex];
+    const isFlying = typeCfg.type === 'FLYING';
+
+    let x, y;
+    if (isFlying) {
+      x = this.flyingStartX;
+      y = this.flyingStartY + (Math.random() - 0.5) * 80;
+    } else {
+      const startPos = this.mapRenderer.getPositionOnPath(0);
+      x = startPos.x;
+      y = startPos.y;
+    }
+
     const hpVariation = 0.9 + Math.random() * 0.2;
 
     this.enemies.push({
       id: ++enemyIdCounter,
-      x: startPos.x,
-      y: startPos.y,
-      hp: Math.round(baseHp * hpVariation),
-      maxHp: Math.round(baseHp * hpVariation),
-      speed: waveConfig.speed,
-      reward: waveConfig.reward,
+      enemyType: typeCfg.type,
+      x,
+      y,
+      hp: Math.round(typeCfg.hp * hpVariation),
+      maxHp: Math.round(typeCfg.hp * hpVariation),
+      baseSpeed: typeCfg.speed,
+      reward: typeCfg.reward,
       progress: 0,
-      hitFlash: 0
+      hitFlash: 0,
+      poison: null,
+      slow: null,
+      wingPhase: Math.random() * Math.PI * 2
     });
   }
 
-  _moveEnemy(enemy, dt, waveConfig) {
-    const pathLength = this.mapRenderer.totalPathLength;
-    const pixelsPerSecond = waveConfig.speed * this.tileSize * 1.5;
-    enemy.progress += (pixelsPerSecond / pathLength) * dt;
+  _moveEnemy(enemy, dt) {
+    let speedMul = 1;
+    if (enemy.slow && enemy.slow.remaining > 0) {
+      speedMul = 1 - enemy.slow.percent;
+    }
 
-    if (enemy.progress > 1) enemy.progress = 1;
+    if (enemy.enemyType === 'FLYING') {
+      const totalDist = this.flyingEndX - this.flyingStartX;
+      const pixelSpeed = enemy.baseSpeed * this.tileSize * 1.5 * speedMul;
+      enemy.x += pixelSpeed * dt;
+      enemy.progress = Math.max(0, Math.min(1, (enemy.x - this.flyingStartX) / totalDist));
+      const endY = this.flyingEndY;
+      const startY = this.flyingStartY;
+      enemy.y = startY + (endY - startY) * enemy.progress + Math.sin(enemy.wingPhase) * 6;
+    } else {
+      const pathLength = this.mapRenderer.totalPathLength;
+      const pixelsPerSecond = enemy.baseSpeed * this.tileSize * 1.5 * speedMul;
+      enemy.progress += (pixelsPerSecond / pathLength) * dt;
+      if (enemy.progress > 1) enemy.progress = 1;
+      const pos = this.mapRenderer.getPositionOnPath(enemy.progress);
+      enemy.x = pos.x;
+      enemy.y = pos.y;
+    }
 
-    const pos = this.mapRenderer.getPositionOnPath(enemy.progress);
-    enemy.x = pos.x;
-    enemy.y = pos.y;
-
+    enemy.wingPhase += dt * 12;
     if (enemy.hitFlash > 0) enemy.hitFlash -= dt;
+  }
+
+  _updateStatusEffects(enemy, dt) {
+    if (enemy.poison && enemy.poison.remaining > 0) {
+      enemy.hp -= enemy.poison.dps * dt;
+      enemy.poison.remaining -= dt;
+      enemy.poison.tickTimer = (enemy.poison.tickTimer || 0) + dt;
+    }
+    if (enemy.slow && enemy.slow.remaining > 0) {
+      enemy.slow.remaining -= dt;
+    }
+  }
+
+  applyPoison(enemy, dps, duration) {
+    if (!enemy.poison || enemy.poison.remaining <= 0 ||
+        dps > enemy.poison.dps || duration > enemy.poison.remaining) {
+      enemy.poison = {
+        dps: dps,
+        remaining: duration,
+        tickTimer: 0
+      };
+    }
+  }
+
+  applySlow(enemy, percent, duration) {
+    if (!enemy.slow || enemy.slow.remaining <= 0 ||
+        percent > enemy.slow.percent || duration > enemy.slow.remaining) {
+      enemy.slow = {
+        percent: percent,
+        remaining: duration
+      };
+    }
   }
 
   damageEnemy(enemy, damage) {
@@ -109,7 +193,14 @@ export class EnemyManager {
     const ctx = this.ctx;
 
     for (const enemy of this.enemies) {
+      if (enemy.enemyType === 'FLYING') {
+        this._renderFlyingShadow(enemy);
+      }
+    }
+
+    for (const enemy of this.enemies) {
       this._renderEnemy(enemy);
+      this._renderStatusIcons(enemy);
     }
 
     for (const fx of this.hitEffects) {
@@ -117,44 +208,106 @@ export class EnemyManager {
     }
   }
 
+  _renderFlyingShadow(enemy) {
+    const ctx = this.ctx;
+    const size = 20;
+    const shadowY = enemy.y + 50 + (1 - enemy.progress) * 20;
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.ellipse(enemy.x, shadowY, size * 0.6, size * 0.25, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
   _renderEnemy(enemy) {
     const ctx = this.ctx;
-    const { x, y, hp, maxHp } = enemy;
-    const size = 26;
+    const { x, y } = enemy;
+    const isFlying = enemy.enemyType === 'FLYING';
+    const size = isFlying ? 22 : 26;
 
     const hpRatio = enemy.hp / enemy.maxHp;
-    if (hpRatio > 0.6) {
-      ctx.fillStyle = enemy.hitFlash > 0 ? '#ffaaaa' : '#27ae60';
-    } else if (hpRatio > 0.3) {
-      ctx.fillStyle = enemy.hitFlash > 0 ? '#ffaaaa' : '#f39c12';
+    let baseColor;
+    if (enemy.hitFlash > 0) baseColor = '#ffaaaa';
+    else if (hpRatio > 0.6) baseColor = isFlying ? '#8e44ad' : '#27ae60';
+    else if (hpRatio > 0.3) baseColor = isFlying ? '#6c3483' : '#f39c12';
+    else baseColor = isFlying ? '#4a235a' : '#e74c3c';
+
+    if (isFlying) {
+      ctx.save();
+      ctx.translate(x, y);
+      const wingFlap = Math.sin(enemy.wingPhase) * 0.4;
+
+      ctx.save();
+      ctx.rotate(-0.6 + wingFlap);
+      ctx.fillStyle = 'rgba(155, 89, 182, 0.85)';
+      ctx.beginPath();
+      ctx.ellipse(-10, 0, 14, 7, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(200, 160, 220, 0.9)';
+      ctx.beginPath();
+      ctx.ellipse(-8, -1, 8, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      ctx.save();
+      ctx.rotate(0.6 - wingFlap);
+      ctx.fillStyle = 'rgba(155, 89, 182, 0.85)';
+      ctx.beginPath();
+      ctx.ellipse(10, 0, 14, 7, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(200, 160, 220, 0.9)';
+      ctx.beginPath();
+      ctx.ellipse(8, -1, 8, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      ctx.fillStyle = baseColor;
+      ctx.beginPath();
+      ctx.arc(0, 0, size / 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(-6, -3, 4, 4);
+      ctx.fillRect(2, -3, 4, 4);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(-5, -2, 2, 2);
+      ctx.fillRect(3, -2, 2, 2);
+
+      ctx.restore();
     } else {
-      ctx.fillStyle = enemy.hitFlash > 0 ? '#ffaaaa' : '#e74c3c';
+      ctx.fillStyle = baseColor;
+      ctx.fillRect(x - size / 2, y - size / 2, size, size);
+
+      ctx.fillStyle = enemy.hitFlash > 0 ? '#ffffff' : (
+        hpRatio > 0.6 ? '#1e8449' : hpRatio > 0.3 ? '#b7950b' : '#922b21'
+      );
+      ctx.fillRect(x - size / 2 + 3, y - size / 2 + 3, size - 6, 4);
+      ctx.fillRect(x - size / 2 + 3, y + size / 2 - 7, size - 6, 4);
+
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(x - 7, y - 4, 5, 5);
+      ctx.fillRect(x + 2, y - 4, 5, 5);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(x - 5, y - 2, 2, 3);
+      ctx.fillRect(x + 4, y - 2, 2, 3);
+
+      ctx.fillStyle = '#1a1';
+      for (let i = 0; i < 4; i++) {
+        const hx = x - size / 2 + 2 + i * 7;
+        const hy = y - size / 2 - 5;
+        ctx.fillRect(hx, hy, 3, 5);
+      }
     }
 
-    ctx.fillRect(x - size / 2, y - size / 2, size, size);
-
-    ctx.fillStyle = enemy.hitFlash > 0 ? '#ffffff' : '#1e8449';
-    ctx.fillRect(x - size / 2 + 3, y - size / 2 + 3, size - 6, 4);
-    ctx.fillRect(x - size / 2 + 3, y + size / 2 - 7, size - 6, 4);
-
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(x - 7, y - 4, 5, 5);
-    ctx.fillRect(x + 2, y - 4, 5, 5);
-    ctx.fillStyle = '#000';
-    ctx.fillRect(x - 5, y - 2, 2, 3);
-    ctx.fillRect(x + 4, y - 2, 2, 3);
-
-    ctx.fillStyle = '#1a1';
-    for (let i = 0; i < 4; i++) {
-      const hx = x - size / 2 + 2 + i * 7;
-      const hy = y - size / 2 - 5;
-      ctx.fillRect(hx, hy, 3, 5);
-    }
-
-    const barWidth = size + 4;
+    const barWidth = size + 6;
     const barHeight = 5;
     const barX = x - barWidth / 2;
-    const barY = y - size / 2 - 12;
+    const barY = (isFlying ? y - size - 6 : y - size / 2 - 12);
 
     ctx.fillStyle = '#222';
     ctx.fillRect(barX - 1, barY - 1, barWidth + 2, barHeight + 2);
@@ -165,7 +318,57 @@ export class EnemyManager {
     if (hpRatio <= 0.3) hpColor = '#e74c3c';
     else if (hpRatio <= 0.6) hpColor = '#f39c12';
     ctx.fillStyle = hpColor;
-    ctx.fillRect(barX, barY, barWidth * hpRatio, barHeight);
+    ctx.fillRect(barX, barY, barWidth * Math.max(0, hpRatio), barHeight);
+
+    if (isFlying) {
+      ctx.fillStyle = '#9b59b6';
+      ctx.font = 'bold 10px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('飞', x, barY - 3);
+    }
+  }
+
+  _renderStatusIcons(enemy) {
+    const ctx = this.ctx;
+    let iconX = enemy.x - 10;
+    const iconY = enemy.y + (enemy.enemyType === 'FLYING' ? 18 : 20);
+
+    if (enemy.poison && enemy.poison.remaining > 0) {
+      ctx.fillStyle = 'rgba(39, 174, 96, 0.9)';
+      ctx.beginPath();
+      ctx.arc(iconX, iconY, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 8px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('毒', iconX, iconY + 1);
+      iconX += 14;
+
+      const pulse = 0.5 + Math.sin(Date.now() / 100) * 0.3;
+      ctx.fillStyle = `rgba(39, 174, 96, ${pulse * 0.3})`;
+      ctx.beginPath();
+      ctx.arc(enemy.x, enemy.y, 16, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    if (enemy.slow && enemy.slow.remaining > 0) {
+      ctx.fillStyle = 'rgba(0, 188, 212, 0.9)';
+      ctx.beginPath();
+      ctx.arc(iconX, iconY, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 8px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('冰', iconX, iconY + 1);
+
+      ctx.strokeStyle = `rgba(0, 188, 212, ${0.3 + Math.sin(Date.now() / 80) * 0.3})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(enemy.x, enemy.y, 18, 0, Math.PI * 2);
+      ctx.stroke();
+    }
   }
 
   _renderHitEffect(fx) {
@@ -193,5 +396,11 @@ export class EnemyManager {
         ctx.fillRect(fx.x + dx - 2, fx.y + dy - 2, 4, 4);
       }
     }
+  }
+
+  resetSpawnState() {
+    this.spawnedCount = 0;
+    this.spawnedByType = [];
+    this.spawnTimer = 0;
   }
 }

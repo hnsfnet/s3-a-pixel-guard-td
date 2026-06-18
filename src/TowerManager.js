@@ -1,4 +1,4 @@
-import { TOWER_TYPES } from './config.js';
+import { TOWER_TYPES, TOWER_LEVELS } from './config.js';
 
 export class TowerManager {
   constructor(ctx, config, mapRenderer) {
@@ -27,7 +27,8 @@ export class TowerManager {
       gridY,
       x: gridX * this.tileSize + this.tileSize / 2,
       y: gridY * this.tileSize + this.tileSize / 2,
-      type: towerType,
+      baseType: towerType,
+      level: 1,
       config: { ...towerConfig },
       cooldown: 0,
       angle: 0,
@@ -36,8 +37,33 @@ export class TowerManager {
     return true;
   }
 
+  upgradeTower(gridX, gridY, gameEngine) {
+    const tower = this.getTowerAt(gridX, gridY);
+    if (!tower) return { success: false, reason: '塔不存在' };
+    if (tower.level >= 3) return { success: false, reason: '已满级' };
+
+    const levels = TOWER_LEVELS[tower.baseType];
+    const nextConfig = levels[tower.level];
+    if (!nextConfig) return { success: false, reason: '已达最高等级' };
+    if (!gameEngine.spendGold(nextConfig.upgradeCost)) {
+      return { success: false, reason: '金币不足' };
+    }
+
+    tower.level++;
+    tower.config = { ...nextConfig };
+    return { success: true, newLevel: tower.level };
+  }
+
   getTowerAt(gridX, gridY) {
     return this.towers.find((t) => t.gridX === gridX && t.gridY === gridY);
+  }
+
+  getUpgradeInfo(tower) {
+    if (!tower) return null;
+    const levels = TOWER_LEVELS[tower.baseType];
+    const current = levels[tower.level - 1];
+    const next = tower.level < 3 ? levels[tower.level] : null;
+    return { current, next, level: tower.level, maxLevel: 3 };
   }
 
   update(dt) {
@@ -66,6 +92,10 @@ export class TowerManager {
     let bestProgress = -1;
 
     for (const enemy of this.enemyManager.enemies) {
+      if (!tower.config.canHitFlying && enemy.enemyType === 'FLYING') {
+        continue;
+      }
+
       const dx = enemy.x - tower.x;
       const dy = enemy.y - tower.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -82,22 +112,55 @@ export class TowerManager {
   _fire(tower) {
     if (!tower.targetEnemy) return;
 
-    const speed = tower.type === 'ARROW' ? 500 : 350;
-    const dx = tower.targetEnemy.x - tower.x;
-    const dy = tower.targetEnemy.y - tower.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
+    const speed = tower.baseType === 'ARROW' ? 500 : 350;
+    const target = tower.targetEnemy;
+    const shots = tower.config.multiShot || 1;
 
-    this.bullets.push({
-      x: tower.x,
-      y: tower.y,
-      vx: (dx / dist) * speed,
-      vy: (dy / dist) * speed,
-      damage: tower.config.damage,
-      splashRadius: tower.config.splashRadius * this.tileSize,
-      color: tower.config.color,
-      type: tower.type,
-      targetId: tower.targetEnemy.id
-    });
+    for (let i = 0; i < shots; i++) {
+      let aimEnemy = target;
+
+      if (shots > 1) {
+        let alt = null;
+        let altProgress = -1;
+        const range = tower.config.range * this.tileSize;
+        for (const e of this.enemyManager.enemies) {
+          if (e.id === target.id) continue;
+          if (!tower.config.canHitFlying && e.enemyType === 'FLYING') continue;
+          const dx = e.x - tower.x;
+          const dy = e.y - tower.y;
+          const d = Math.sqrt(dx * dx + dy * dy);
+          if (d <= range && e.progress > altProgress) {
+            alt = e;
+            altProgress = e.progress;
+          }
+        }
+        if (alt && i === 1) aimEnemy = alt;
+      }
+
+      const dx = aimEnemy.x - tower.x;
+      const dy = aimEnemy.y - tower.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const jitterX = shots > 1 ? (i - (shots - 1) / 2) * 12 : 0;
+      const jitterY = shots > 1 ? (i - (shots - 1) / 2) * 8 : 0;
+
+      this.bullets.push({
+        x: tower.x + (jitterX / this.tileSize) * 2,
+        y: tower.y + (jitterY / this.tileSize) * 2,
+        vx: (dx / dist) * speed,
+        vy: (dy / dist) * speed,
+        damage: tower.config.damage,
+        splashRadius: tower.config.splashRadius * this.tileSize,
+        color: tower.config.color,
+        darkColor: tower.config.darkColor,
+        baseType: tower.baseType,
+        towerLevel: tower.level,
+        poisonDps: tower.config.poisonDps || 0,
+        poisonDuration: tower.config.poisonDuration || 0,
+        slowPercent: tower.config.slowPercent || 0,
+        slowDuration: tower.config.slowDuration || 0,
+        targetId: aimEnemy.id
+      });
+    }
   }
 
   _updateBullets(dt) {
@@ -108,13 +171,13 @@ export class TowerManager {
       bullet.x += bullet.vx * dt;
       bullet.y += bullet.vy * dt;
 
-      if (bullet.x < 0 || bullet.x > this.config.gridWidth * this.tileSize ||
-          bullet.y < 0 || bullet.y > this.config.gridHeight * this.tileSize) {
+      if (bullet.x < -20 || bullet.x > this.config.gridWidth * this.tileSize + 20 ||
+          bullet.y < -20 || bullet.y > this.config.gridHeight * this.tileSize + 20) {
         toRemove.push(i);
         continue;
       }
 
-      if (this._checkBulletCollision(bullet, i)) {
+      if (this._checkBulletCollision(bullet)) {
         toRemove.push(i);
       }
     }
@@ -124,18 +187,19 @@ export class TowerManager {
     }
   }
 
-  _checkBulletCollision(bullet, bulletIndex) {
+  _checkBulletCollision(bullet) {
     for (const enemy of this.enemyManager.enemies) {
       const dx = enemy.x - bullet.x;
       const dy = enemy.y - bullet.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      const hitRadius = 18;
+      const hitRadius = enemy.enemyType === 'FLYING' ? 20 : 18;
 
       if (dist <= hitRadius) {
         if (bullet.splashRadius > 0) {
           this._applySplashDamage(bullet, enemy);
         } else {
           this.enemyManager.damageEnemy(enemy, bullet.damage);
+          this._applyHitEffects(enemy, bullet);
         }
         return true;
       }
@@ -153,7 +217,17 @@ export class TowerManager {
         const falloff = 1 - (dist / bullet.splashRadius) * 0.5;
         const dmg = Math.round(bullet.damage * falloff);
         this.enemyManager.damageEnemy(enemy, dmg);
+        this._applyHitEffects(enemy, bullet);
       }
+    }
+  }
+
+  _applyHitEffects(enemy, bullet) {
+    if (bullet.poisonDps > 0 && bullet.poisonDuration > 0) {
+      this.enemyManager.applyPoison(enemy, bullet.poisonDps, bullet.poisonDuration);
+    }
+    if (bullet.slowPercent > 0 && bullet.slowDuration > 0) {
+      this.enemyManager.applySlow(enemy, bullet.slowPercent, bullet.slowDuration);
     }
   }
 
@@ -165,7 +239,7 @@ export class TowerManager {
 
   _renderTower(tower) {
     const ctx = this.ctx;
-    const { x, y, config, angle } = tower;
+    const { x, y, config, angle, level, baseType } = tower;
     const size = this.tileSize;
 
     ctx.fillStyle = '#444';
@@ -173,17 +247,30 @@ export class TowerManager {
     ctx.fillStyle = '#333';
     ctx.fillRect(x - size * 0.35, y - size * 0.35, size * 0.7, size * 0.7);
 
+    for (let i = 0; i < level; i++) {
+      ctx.fillStyle = '#ffd700';
+      ctx.fillRect(x - size * 0.3 + i * 7, y + size * 0.2, 5, 5);
+    }
+
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle);
 
-    if (tower.type === 'ARROW') {
+    if (baseType === 'ARROW') {
       ctx.fillStyle = config.color;
       ctx.fillRect(-8, -8, 16, 16);
       ctx.fillStyle = config.darkColor;
       ctx.fillRect(-6, -6, 12, 12);
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(0, -2, 22, 4);
+
+      if (level >= 2) {
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, -5, 20, 3);
+        ctx.fillRect(0, 2, 20, 3);
+      } else {
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, -2, 22, 4);
+      }
+
       ctx.fillStyle = config.darkColor;
       ctx.beginPath();
       ctx.moveTo(22, 0);
@@ -191,19 +278,52 @@ export class TowerManager {
       ctx.lineTo(16, 6);
       ctx.closePath();
       ctx.fill();
-    } else if (tower.type === 'CANNON') {
+
+      if (level >= 3) {
+        ctx.restore();
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.fillStyle = 'rgba(39, 174, 96, 0.4)';
+        ctx.beginPath();
+        ctx.arc(0, 0, 16, 0, Math.PI * 2);
+        ctx.fill();
+        return;
+      }
+
+    } else if (baseType === 'CANNON') {
       ctx.fillStyle = config.color;
       ctx.fillRect(-10, -10, 20, 20);
       ctx.fillStyle = config.darkColor;
       ctx.fillRect(-8, -8, 16, 16);
       ctx.fillStyle = '#333';
-      ctx.fillRect(0, -7, 24, 14);
+
+      const barrelW = level >= 2 ? 28 : 24;
+      const barrelH = level >= 3 ? 16 : 14;
+      ctx.fillRect(0, -barrelH / 2, barrelW, barrelH);
+
       ctx.fillStyle = '#222';
-      ctx.fillRect(20, -6, 6, 12);
+      ctx.fillRect(barrelW - 4, -barrelH / 2 + 1, 6, barrelH - 2);
+
       ctx.fillStyle = '#555';
       ctx.beginPath();
       ctx.arc(0, 0, 8, 0, Math.PI * 2);
       ctx.fill();
+
+      if (level >= 2) {
+        ctx.fillStyle = 'rgba(255, 100, 0, 0.5)';
+        ctx.fillRect(barrelW - 2, -barrelH / 2 - 2, 4, barrelH + 4);
+      }
+      if (level >= 3) {
+        ctx.restore();
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.strokeStyle = 'rgba(0, 188, 212, 0.7)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, 18, 0, Math.PI * 2);
+        ctx.stroke();
+        return;
+      }
     }
 
     ctx.restore();
@@ -213,13 +333,18 @@ export class TowerManager {
     const ctx = this.ctx;
 
     for (const bullet of this.bullets) {
-      if (bullet.type === 'ARROW') {
+      if (bullet.baseType === 'ARROW') {
         const angle = Math.atan2(bullet.vy, bullet.vx);
         ctx.save();
         ctx.translate(bullet.x, bullet.y);
         ctx.rotate(angle);
-        ctx.fillStyle = bullet.color;
+
+        let color = bullet.color;
+        if (bullet.towerLevel === 3) color = '#2ecc71';
+        else if (bullet.towerLevel === 2) color = '#9b59b6';
+        ctx.fillStyle = color;
         ctx.fillRect(-8, -2, 16, 4);
+
         ctx.fillStyle = '#fff';
         ctx.beginPath();
         ctx.moveTo(8, 0);
@@ -227,23 +352,46 @@ export class TowerManager {
         ctx.lineTo(4, 4);
         ctx.closePath();
         ctx.fill();
+
+        if (bullet.towerLevel >= 3) {
+          ctx.fillStyle = 'rgba(39, 174, 96, 0.5)';
+          ctx.beginPath();
+          ctx.arc(-4, 0, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
         ctx.restore();
-      } else if (bullet.type === 'CANNON') {
-        ctx.fillStyle = '#333';
+
+      } else if (bullet.baseType === 'CANNON') {
+        let mainColor = '#333';
+        let glowColor = 'rgba(255, 165, 0, 0.6)';
+        let trailColor = '#e74c3c';
+        if (bullet.towerLevel === 3) {
+          mainColor = '#00838f';
+          glowColor = 'rgba(0, 200, 230, 0.7)';
+          trailColor = '#00bcd4';
+        } else if (bullet.towerLevel === 2) {
+          mainColor = '#8b0000';
+          glowColor = 'rgba(255, 80, 0, 0.8)';
+          trailColor = '#ff4500';
+        }
+
+        ctx.fillStyle = mainColor;
         ctx.beginPath();
         ctx.arc(bullet.x, bullet.y, 7, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = '#e74c3c';
+
+        ctx.fillStyle = trailColor;
         ctx.beginPath();
         ctx.arc(bullet.x - 2, bullet.y - 2, 3, 0, Math.PI * 2);
         ctx.fill();
+
         const splashAngle = Math.atan2(bullet.vy, bullet.vx) + Math.PI;
-        ctx.fillStyle = 'rgba(255, 165, 0, 0.6)';
+        ctx.fillStyle = glowColor;
         ctx.beginPath();
         ctx.arc(
           bullet.x + Math.cos(splashAngle) * 8,
           bullet.y + Math.sin(splashAngle) * 8,
-          4, 0, Math.PI * 2
+          bullet.towerLevel >= 2 ? 6 : 4, 0, Math.PI * 2
         );
         ctx.fill();
       }
@@ -267,5 +415,10 @@ export class TowerManager {
     ctx.fillStyle = config.color;
     ctx.fillRect(x - size * 0.3, y - size * 0.3, size * 0.6, size * 0.6);
     ctx.globalAlpha = 1;
+  }
+
+  renderTowerRange(tower) {
+    if (!tower) return;
+    this.mapRenderer.drawRangeCircle(tower.gridX, tower.gridY, tower.config.range, 'rgba(0, 200, 255, 0.15)');
   }
 }

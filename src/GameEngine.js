@@ -1,4 +1,4 @@
-import { GAME_STATE, WAVES } from './config.js';
+import { GAME_STATE, WAVES, getWaveTotalCount } from './config.js';
 
 export class GameEngine {
   constructor(ctx, config, mapRenderer, towerManager, enemyManager, uiController) {
@@ -18,11 +18,13 @@ export class GameEngine {
 
     this.lastTime = 0;
     this.running = false;
+    this.selectedTower = null;
   }
 
   start() {
     this.running = true;
     this.lastTime = performance.now();
+    this.uiController.updateWavePreview(this);
     this._loop(this.lastTime);
   }
 
@@ -35,11 +37,13 @@ export class GameEngine {
     this.towerManager.towers = [];
     this.towerManager.bullets = [];
     this.enemyManager.enemies = [];
-    this.enemyManager.spawnedCount = 0;
-    this.enemyManager.spawnTimer = 0;
+    this.enemyManager.resetSpawnState();
+    this.selectedTower = null;
     this.uiController.hideBuildMenu();
+    this.uiController.hideUpgradePanel();
     this.uiController.hideGameOver();
     this.uiController.updateHUD(this);
+    this.uiController.updateWavePreview(this);
   }
 
   _loop(currentTime) {
@@ -78,15 +82,15 @@ export class GameEngine {
   _startWave() {
     this.state = GAME_STATE.PLAYING;
     this.currentWave++;
-    this.enemyManager.spawnedCount = 0;
-    this.enemyManager.spawnTimer = 0;
+    this.enemyManager.resetSpawnState();
     this.uiController.updateWave(this.currentWave, this.config.totalWaves);
+    this.uiController.updateWavePreview(this);
   }
 
   _checkWaveComplete() {
-    const waveConfig = WAVES[this.currentWave - 1];
+    const totalToSpawn = getWaveTotalCount(this.currentWave - 1);
     if (
-      this.enemyManager.spawnedCount >= waveConfig.count &&
+      this.enemyManager.spawnedCount >= totalToSpawn &&
       this.enemyManager.enemies.length === 0
     ) {
       if (this.currentWave >= this.config.totalWaves) {
@@ -95,6 +99,7 @@ export class GameEngine {
       } else {
         this.state = GAME_STATE.WAITING;
         this.countdown = this.config.waveCountdown;
+        this.uiController.updateWavePreview(this);
       }
     }
   }
@@ -104,13 +109,44 @@ export class GameEngine {
     ctx.clearRect(0, 0, this.config.gridWidth * this.config.tileSize, this.config.gridHeight * this.config.tileSize);
 
     this.mapRenderer.render();
+
+    if (this.selectedTower) {
+      this.towerManager.renderTowerRange(this.selectedTower);
+    }
+
     this.towerManager.renderTowers();
     this.enemyManager.render();
     this.towerManager.renderBullets();
   }
 
   buildTower(gridX, gridY, towerType) {
-    return this.towerManager.buildTower(gridX, gridY, towerType, this);
+    const ok = this.towerManager.buildTower(gridX, gridY, towerType, this);
+    if (ok) {
+      this.selectedTower = null;
+      this.uiController.hideUpgradePanel();
+    }
+    return ok;
+  }
+
+  upgradeTower(gridX, gridY) {
+    const result = this.towerManager.upgradeTower(gridX, gridY, this);
+    if (result.success) {
+      const t = this.getTowerAt(gridX, gridY);
+      this.selectedTower = t;
+    }
+    return result;
+  }
+
+  selectTower(tower) {
+    this.selectedTower = tower;
+  }
+
+  clearSelectedTower() {
+    this.selectedTower = null;
+  }
+
+  getUpgradeInfo(tower) {
+    return this.towerManager.getUpgradeInfo(tower);
   }
 
   deductHealth(amount) {
@@ -142,5 +178,11 @@ export class GameEngine {
 
   getTowerAt(gridX, gridY) {
     return this.towerManager.getTowerAt(gridX, gridY);
+  }
+
+  getNextWaveIndex() {
+    if (this.state === GAME_STATE.WAITING) return this.currentWave;
+    if (this.state === GAME_STATE.PLAYING) return this.currentWave;
+    return -1;
   }
 }

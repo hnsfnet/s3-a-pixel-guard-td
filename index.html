@@ -28,6 +28,11 @@
                 <span class="hud-label">倒计时</span>
                 <span id="countdown-value" class="hud-value countdown">10</span>
             </div>
+            <div id="next-wave-preview" class="wave-preview">
+                <span class="hud-label">下一波</span>
+                <div id="preview-enemies" class="preview-enemies">
+                </div>
+            </div>
         </div>
 
         <div class="canvas-wrapper">
@@ -52,6 +57,10 @@
                                 <span class="stat-label">射程</span>
                                 <span class="stat-value">3格</span>
                             </div>
+                            <div class="stat-row">
+                                <span class="stat-label">对空</span>
+                                <span class="stat-value good">✓</span>
+                            </div>
                         </div>
                         <div class="tower-cost">💰 50</div>
                     </div>
@@ -75,11 +84,43 @@
                                 <span class="stat-label">溅射</span>
                                 <span class="stat-value">1.2格</span>
                             </div>
+                            <div class="stat-row">
+                                <span class="stat-label">对空</span>
+                                <span class="stat-value bad">✗</span>
+                            </div>
                         </div>
                         <div class="tower-cost">💰 100</div>
                     </div>
                 </div>
                 <button id="cancel-build" class="cancel-btn">取消</button>
+            </div>
+
+            <div id="upgrade-panel" class="upgrade-panel hidden">
+                <div id="upgrade-title" class="upgrade-title">箭塔 Lv.1</div>
+                <div id="upgrade-desc" class="upgrade-desc">基础箭塔，攻速快、伤害低、射程短</div>
+                
+                <div class="upgrade-section current">
+                    <div class="section-title">当前属性</div>
+                    <div id="current-stats" class="stats-grid"></div>
+                </div>
+
+                <div id="upgrade-next-section" class="upgrade-section next">
+                    <div class="section-title">升级为：<span id="next-name"></span></div>
+                    <div id="next-effects" class="effects-list"></div>
+                    <div id="next-stats" class="stats-grid"></div>
+                </div>
+
+                <div id="max-level-section" class="max-level-section">
+                    <div class="section-title max">⭐ 已满级 ⭐</div>
+                    <div class="max-desc">已达到最高等级 3 级</div>
+                </div>
+
+                <div class="upgrade-actions">
+                    <button id="cancel-upgrade" class="cancel-btn">关闭</button>
+                    <button id="confirm-upgrade" class="upgrade-btn">
+                        <span id="upgrade-cost">💰 80</span> 升级
+                    </button>
+                </div>
             </div>
 
             <div id="game-over" class="game-over hidden">
@@ -96,7 +137,7 @@
         </div>
 
         <div class="instructions">
-            <p>💡 点击绿色空地建造防御塔 | 击杀敌人获得金币 | 守护你的领地！</p>
+            <p>💡 点击绿色空地建塔 | 点击已建塔升级 | 只有箭塔能攻击飞行敌人 | 守护你的领地！</p>
         </div>
     </div>
 
