@@ -44,15 +44,23 @@ export class EnemyManager {
       this._updateStatusEffects(enemy, dt);
       this._moveEnemy(enemy, dt);
 
+      let reachedEnd = false;
+      let killed = false;
+
       if (enemy.progress >= 1) {
         gameEngine.deductHealth(1);
-        toRemove.push(i);
-        continue;
+        reachedEnd = true;
       }
 
       if (enemy.hp <= 0) {
-        gameEngine.addGold(enemy.reward);
-        this._addHitEffect(enemy.x, enemy.y, true);
+        killed = true;
+        if (!reachedEnd) {
+          gameEngine.addGold(enemy.reward);
+          this._addHitEffect(enemy.x, enemy.y, true);
+        }
+      }
+
+      if (reachedEnd || killed) {
         toRemove.push(i);
       }
     }

@@ -45,7 +45,11 @@ export class TowerManager {
     const levels = TOWER_LEVELS[tower.baseType];
     const nextConfig = levels[tower.level];
     if (!nextConfig) return { success: false, reason: '已达最高等级' };
-    if (!gameEngine.spendGold(nextConfig.upgradeCost)) {
+
+    const cost = Math.ceil(nextConfig.upgradeCost || 0);
+    if (cost <= 0) return { success: false, reason: '配置错误' };
+    if (gameEngine.gold < cost) return { success: false, reason: '金币不足' };
+    if (!gameEngine.spendGold(cost)) {
       return { success: false, reason: '金币不足' };
     }
 
@@ -214,8 +218,8 @@ export class TowerManager {
       const dist = Math.sqrt(dx * dx + dy * dy);
 
       if (dist <= bullet.splashRadius) {
-        const falloff = 1 - (dist / bullet.splashRadius) * 0.5;
-        const dmg = Math.round(bullet.damage * falloff);
+        const damageMul = enemy.id === hitEnemy.id ? 1.0 : 0.6;
+        const dmg = Math.max(1, Math.round(bullet.damage * damageMul));
         this.enemyManager.damageEnemy(enemy, dmg);
         this._applyHitEffects(enemy, bullet);
       }

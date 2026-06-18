@@ -94,12 +94,16 @@ export class GameEngine {
       this.enemyManager.enemies.length === 0
     ) {
       if (this.currentWave >= this.config.totalWaves) {
-        this.state = GAME_STATE.WIN;
-        this.uiController.showGameOver(true, this);
+        if (this.state !== GAME_STATE.LOSE) {
+          this.state = GAME_STATE.WIN;
+          this.uiController.showGameOver(true, this);
+        }
       } else {
-        this.state = GAME_STATE.WAITING;
-        this.countdown = this.config.waveCountdown;
-        this.uiController.updateWavePreview(this);
+        if (this.state !== GAME_STATE.LOSE) {
+          this.state = GAME_STATE.WAITING;
+          this.countdown = this.config.waveCountdown;
+          this.uiController.updateWavePreview(this);
+        }
       }
     }
   }
@@ -163,8 +167,10 @@ export class GameEngine {
   }
 
   spendGold(amount) {
+    if (amount <= 0) return false;
     if (this.gold >= amount) {
       this.gold -= amount;
+      if (this.gold < 0) this.gold = 0;
       return true;
     }
     return false;
