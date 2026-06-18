@@ -1,0 +1,25 @@
+{
+  "name": "s3-a-pixel-guard-td",
+  "version": "1.0.0",
+  "description": "像素守卫 - ECS架构塔防游戏",
+  "type": "module",
+  "scripts": {
+    "test": "jest --verbose"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "transform": {
+      "^.+\\.js$": "babel-jest"
+    },
+    "transformIgnorePatterns": [],
+    "testMatch": [
+      "<rootDir>/tests/**/*.test.js"
+    ]
+  },
+  "devDependencies": {
+    "@babel/core": "^8.0.1",
+    "@babel/preset-env": "^8.0.1",
+    "babel-jest": "^30.4.1",
+    "jest": "^30.4.2"
+  }
+}
