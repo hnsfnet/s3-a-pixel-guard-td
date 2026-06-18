@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>像素守卫 - Pixel Guard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-container">
+        <div class="hud">
+            <div class="hud-item">
+                <span class="hud-label">波次</span>
+                <span id="wave-value" class="hud-value">1 / 3</span>
+            </div>
+            <div class="hud-item">
+                <span class="hud-icon">💰</span>
+                <span id="gold-value" class="hud-value gold">150</span>
+            </div>
+            <div class="hud-item">
+                <span class="hud-icon">❤️</span>
+                <div class="health-bar">
+                    <div id="health-fill" class="health-fill"></div>
+                    <span id="health-value" class="health-value">20 / 20</span>
+                </div>
+            </div>
+            <div class="hud-item">
+                <span class="hud-label">倒计时</span>
+                <span id="countdown-value" class="hud-value countdown">10</span>
+            </div>
+        </div>
+
+        <div class="canvas-wrapper">
+            <canvas id="game-canvas" width="800" height="600"></canvas>
+            
+            <div id="build-menu" class="build-menu hidden">
+                <div class="build-menu-title">选择防御塔</div>
+                <div class="tower-options">
+                    <div class="tower-option" data-tower="ARROW">
+                        <div class="tower-icon arrow-icon"></div>
+                        <div class="tower-name">箭塔</div>
+                        <div class="tower-stats">
+                            <div class="stat-row">
+                                <span class="stat-label">伤害</span>
+                                <span class="stat-value">10</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">攻速</span>
+                                <span class="stat-value">快</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">射程</span>
+                                <span class="stat-value">3格</span>
+                            </div>
+                        </div>
+                        <div class="tower-cost">💰 50</div>
+                    </div>
+                    <div class="tower-option" data-tower="CANNON">
+                        <div class="tower-icon cannon-icon"></div>
+                        <div class="tower-name">炮塔</div>
+                        <div class="tower-stats">
+                            <div class="stat-row">
+                                <span class="stat-label">伤害</span>
+                                <span class="stat-value">35</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">攻速</span>
+                                <span class="stat-value">慢</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">射程</span>
+                                <span class="stat-value">4格</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">溅射</span>
+                                <span class="stat-value">1.2格</span>
+                            </div>
+                        </div>
+                        <div class="tower-cost">💰 100</div>
+                    </div>
+                </div>
+                <button id="cancel-build" class="cancel-btn">取消</button>
+            </div>
+
+            <div id="game-over" class="game-over hidden">
+                <div class="game-over-content">
+                    <h1 id="game-over-title">游戏结束</h1>
+                    <div class="game-stats">
+                        <div>通过波次：<span id="final-wave">0</span> / 3</div>
+                        <div>剩余金币：<span id="final-gold">0</span></div>
+                        <div>剩余生命：<span id="final-health">0</span></div>
+                    </div>
+                    <button id="restart-btn" class="restart-btn">重新开始</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="instructions">
+            <p>💡 点击绿色空地建造防御塔 | 击杀敌人获得金币 | 守护你的领地！</p>
+        </div>
+    </div>
+
+    <script type="module" src="src/main.js"></script>
+</body>
+</html>
